@@ -7,11 +7,11 @@ import (
 	"log"
 	"net/http"
 
+	"twitch_chat_analysis/pkg/rabbitmq"
+
 	"github.com/gin-gonic/gin"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
-
-const connStr = "amqp://user:password@localhost:7001/"
 
 type message struct {
 	Sender   string `json:"sender"`
@@ -38,31 +38,17 @@ func Handle(c *gin.Context) {
 		return
 	}
 
-	conn, err := amqp.Dial(connStr)
+	rmq, err := rabbitmq.Get()
 	if err != nil {
-		log.Printf("error dialing rabbitmq: %s", err)
+		log.Printf("error getting rabbitmq channel: %s", err)
 		c.String(http.StatusInternalServerError, "")
 		return
 	}
 
-	ch, err := conn.Channel()
-	if err != nil {
-		log.Printf("error opening rabbitmq channel: %s", err)
-		c.String(http.StatusInternalServerError, "")
-		return
-	}
-
-	q, err := ch.QueueDeclare("message", false, false, false, false, nil)
-	if err != nil {
-		log.Printf("error declaring rabbitmq queue: %s", err)
-		c.String(http.StatusInternalServerError, "")
-		return
-	}
-
-	err = ch.PublishWithContext(
+	err = rmq.Channel.PublishWithContext(
 		context.Background(),
 		"",
-		q.Name,
+		rmq.Queue.Name,
 		false,
 		false,
 		amqp.Publishing{
